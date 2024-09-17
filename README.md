@@ -5,8 +5,8 @@ If you like adblock-lean and can benefit from it, then please leave a ⭐ (top r
 **FRIENDLY USER NOTICE:**  Current versions 19th September 2024 onwards, makes the switch to using raw formatted blocklists by default (still using Hagezi lists).  Dnsmasq formatted lists are still supported.  Raw lists have the benefit of smaller file size dowload, improvments in processing speed and reduced ram useage.  On the first run after updating, adblock-lean will prompt you (y/n) to automotically convert Hagezi & OISD lists from dnsmasq format to raw format.  For other lists, you can choose to find a raw formatted list or continue using dnsmasq formatted.  You can always use ```service adblock-lean gen_config``` to generate a fresh configuration file if required.
 
 Visual example of raw ```blocklist_urls``` [Hagezi light raw](https://raw.githubusercontent.com/hagezi/dns-blocklists/main/wildcard/light-onlydomains.txt).
-
 Visual example of dnsmasq formmatted ```dnsmasq_blocklist_urls``` [Hagezi light dnsmasq](https://raw.githubusercontent.com/hagezi/dns-blocklists/main/dnsmasq/light.txt).
+
 
 adblock-lean is **highly optimized for RAM & CPU efficiency** during blocklist downloading & processing, and does not remain running in memory after each execution.  adblock-lean is designed to leverage the [major rewrite of the DNS server and domain handling code](https://thekelleys.org.uk/dnsmasq/CHANGELOG) associated with dnsmasq 2.86, that drastically improves dnsmasq performance and reduces memory foot-print.  This facilitates the use of very large blocklists even for low spec, low performance devices.
 
