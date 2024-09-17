@@ -2,6 +2,10 @@
 
 If you like adblock-lean and can benefit from it, then please leave a ⭐ (top right) and become a [stargazer](https://github.com/lynxthecat/adblock-lean/stargazers)! And feel free to post any feedback on the official OpenWrt thread [here](https://forum.openwrt.org/t/adblock-lean-set-up-adblock-using-dnsmasq-blocklist/157076). Thank you for your support.
 
+**FRIENDLY USER NOTICE:**  Current versions 19th September 2024 onwards, makes the switch to using raw formatted blocklists by default (still using Hagezi lists).  Dnsmasq formatted lists are still supported.  Raw lists have the benefit of smaller file size dowload, improvments in processing speed and reduced ram useage.  On the first run after updating, adblock-lean will prompt you (y/n) to automotically convert Hagezi & OISD lists from dnsmasq format to raw format.  For other lists, you can choose to find a raw formatted list or continue using dnsmasq formatted.  You can always use ```service adblock-lean gen_config``` to generate a fresh configuration file if required.
+Visual example of raw ```blocklist_urls``` [Hagezi light raw](https://raw.githubusercontent.com/hagezi/dns-blocklists/main/wildcard/light-onlydomains.txt)
+Visual example of dnsmasq formmatted ```dnsmasq_blocklist_urls``` [Hagezi light dnsmasq](https://raw.githubusercontent.com/hagezi/dns-blocklists/main/dnsmasq/light.txt)
+
 adblock-lean is **highly optimized for RAM & CPU efficiency** during blocklist downloading & processing, and does not remain running in memory after each execution.  adblock-lean is designed to leverage the [major rewrite of the DNS server and domain handling code](https://thekelleys.org.uk/dnsmasq/CHANGELOG) associated with dnsmasq 2.86, that drastically improves dnsmasq performance and reduces memory foot-print.  This facilitates the use of very large blocklists even for low spec, low performance devices.
 
 The default Hagezi dnsmasq format lists [hagezi](https://github.com/hagezi/dns-blocklists) are recommended to block as many _ads, affiliate, tracking, metrics, telemetry, fake, phishing, malware, scam, coins and other "crap"_ as possible, all while breaking as few websites as possible.  Any other dnsmasq format lists of your choice can also be configured and used.
@@ -86,15 +90,22 @@ Each configuration option is internally documented with comments in `/root/adblo
 
 | Variable | Setting                                          |
 | -------: | :----------------------------------------------- |
-|                     `blocklist_urls` | One or more blocklist URLs to download and process                       |
-|                     `allowlist_urls` | One or more allowlist URLs to download and process                       |
+|                     `blocklist_urls` | One or more raw blocklist URLs to download and process                   |
+|                `blocklist_ipv4_urls` | One or more raw ipv4 blocklist URLs to download and process              |
+|                     `allowlist_urls` | One or more raw allowlist URLs to download and process                   |
+|             `dnsmasq_blocklist_urls` | One or more dnsmasq format blocklist URLs to download and process        |
+|        `dnsmasq_blocklist_ipv4_urls` | One or more dnsmasq format ipv4 blocklist URLs to download and process   |
+|             `dnsmasq_allowlist_urls` | One or more dnsmasq format allowlist URLs to download and process        |
 |               `local_allowlist_path` | Path to local allowlist (domain will not be blocked)                     |
 |               `local_blocklist_path` | Path to local blocklist (domain will be blocked)                         |
+|                      `deduplication` | Whether to perform sorting and deduplication of entries                  |
 | `min_blocklist_file_part_line_count` | Minimum number of lines of individual downloaded blocklist part          |
+| `min_blocklist_ipv4_part_line_count` | Minimum number of lines of individual downloaded ipv4 blocklist part     |
+|       min_allowlist_part_line_count` | Minimum number of lines of individual downloaded blocklist part          |
 |    `max_blocklist_file_part_size_KB` | Maximum size of any individual downloaded blocklist part                 |
 |         `max_blocklist_file_size_KB` | Maximim size of combined, processed blocklist                            |
 |                `min_good_line_count` | Minimum number of good lines in final postprocessed blocklist            |
-|                 `compress_blocklist` | Enable (1) or disable (0) blocklist compression once dnsmasq loaded      |
+|                    `use_compression` | Compress while processing, and final blocklists.  Reduces memory useage  |
 |            `initial_dnsmasq_restart` | Enable (1) or disable (0) initial dnsmasq restart to free up memory      |
 |               `max_download_retries` | Maximum number of download retries for allowlist/blocklist parts         |
 |            `list_part_failed_action` | Governs failed lists handling: 'SKIP_PARTIAL' or 'STOP'                  |
@@ -140,7 +151,7 @@ max_blocklist_file_size_KB=20000
 min_good_line_count=200000
 ```
 
-- Large =>512mb routers. Example below: circa 900k entries
+- Large =>512mb routers. Example below: circa 700k entries
 ```bash
 blocklist_urls="https://raw.githubusercontent.com/hagezi/dns-blocklists/main/dnsmasq/pro.txt https://raw.githubusercontent.com/hagezi/dns-blocklists/main/dnsmasq/tif.txt"
 min_blocklist_file_part_line_count=1
