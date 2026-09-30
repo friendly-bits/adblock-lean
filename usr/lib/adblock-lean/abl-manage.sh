@@ -1459,22 +1459,47 @@ set_global_env()
 	:
 }
 
-# Blockset run states:
-# 0 - running
-# 1 - error
-# 2 - transitional
-# 3 - paused
-# 4 - stopped
-set_blocksets_env()
+# Composes declarations of the variables census_blockset_files() writes, for every ID in SET_IDS
+#   and every index in the conf-dirs list
+# The caller runs 'local' on the result before the census: its results are read after it returns,
+#   so they can not be the census's own locals, and undeclared they would land in globals
+# 1: out-var
+# 2: conf-dirs list - the one passed to census_blockset_files()
+get_census_locals()
+{
+	local gcl_id gcl_dir gcl_index gcl_names IFS="${DEFAULT_IFS}"
+	for gcl_id in ${SET_IDS}
+	do
+		gcl_names="${gcl_names} bl_found_cnt__${gcl_id}=0 sbe_state__${gcl_id}= rd_found__${gcl_id}="
+		gcl_index=0
+		for gcl_dir in ${2}
+		do
+			incr gcl_index
+			gcl_names="${gcl_names} cs_found__${gcl_id}__${gcl_index}= bl_found__${gcl_id}__${gcl_index}="
+		done
+	done
+	export -n "${1:?}=${gcl_names# }"
+}
+
+# Registers blockset filesand conf-scripts in the run-dir and conf-dirs,
+#   checks for unaccounted for and unexpected files and removes offending files, except under 'status'.
+# Records rd_found__<id>, bl_found_cnt__<id>, sbe_state__<id>, cs_found__<id>__<n>, bl_found__<id>__<n>
+#   (<n>: the conf-dir's index in the list), declared by the caller via get_census_locals()
+
+# 1: conf-dirs list
+# Return codes:
+# 0: no fault found (always under 'status')
+# 1: fault found
+census_blockset_files()
 {
 	incr_bl_found()
 	{
 		incr "bl_found_cnt__${1}"
 		test_exp "bl_found_cnt__${1} > 1" &&
-			{ sbe_fatal "${1}"; add2list cd_fail_ids "${1}"; }
+			{ census_fatal "${1}"; add2list cd_fail_ids "${1}"; }
 	}
 
-	sbe_fatal()
+	census_fatal()
 	{
 		[ -n "${1}" ] && is_included "${1}" "${SET_IDS}" &&
 			set_int "sbe_state__${1} = 1"
@@ -1484,18 +1509,106 @@ set_blocksets_env()
 	}
 
 	local \
+		IFS="${DEFAULT_IFS}" \
+		cbf_id cbf_type base_fname desc \
+		rd_file rd_files \
+		conf_dir conf_dirs cd_file \
+		cd_files cd_index cd_fatal cd_fail_ids \
+		census_dirs="${1}"
+
+	find_files rd_files "${ABL_RUN_DIR:?}" "${BLOCKSET_BASE_FNAME:?}" "*"
+	IFS="${_NL_}"
+	for rd_file in ${rd_files}
+	do
+		IFS="${DEFAULT_IFS}"
+		get_id_from_file cbf_id "${rd_file}" bl ||
+		{
+			log_msg "Removing the file '${rd_file}'."
+			rm -f "${rd_file}"
+			continue
+		}
+
+		debug_msg "Found ${rd_file}"
+		[ -n "${cbf_id}" ] &&
+		is_included "${cbf_id}" "${SET_IDS}" ||
+		{
+			reg_fail "Found unexpected blockset file '${rd_file}'."
+			census_fatal "" "${rd_file}"
+			continue
+		}
+		export -n "rd_found__${cbf_id}=${rd_file}"
+		incr_bl_found "${cbf_id}"
+	done
+	IFS="${DEFAULT_IFS}"
+
+	cd_index=0
+	for conf_dir in ${census_dirs}
+	do
+		incr cd_index
+
+		for cbf_type in cs bl
+		do
+			case "${cbf_type}" in
+				cs) base_fname="${CS_BASE_FNAME:?}" desc=conf-script ;;
+				bl) base_fname="${BLOCKSET_BASE_FNAME:?}" desc=blockset
+			esac
+			find_files cd_files "${conf_dir}" "${base_fname}" "*" || continue
+
+			IFS="${_NL_}"
+			for cd_file in ${cd_files}
+			do
+				IFS="${DEFAULT_IFS}"
+				get_id_from_file cbf_id "${cd_file}" "${cbf_type}" &&
+				[ -n "${cbf_id}" ] &&
+				is_included "${cbf_id}" "${SET_IDS}" ||
+				{
+					reg_fail "Found unexpected ${desc} file '${cd_file}'."
+					census_fatal "" "${cd_file}"
+					continue
+				}
+
+				export -n "${cbf_type}_found__${cbf_id}__${cd_index}=${cd_file}"
+
+				[ "${cbf_type}" = bl ] &&
+				{
+					debug_msg "Found ${cd_file}"
+					incr_bl_found "${cbf_id}"
+				}
+
+				get_params "${cbf_id}" conf_dirs
+				is_included "${conf_dir}" "${conf_dirs}" &&
+					continue
+
+				reg_fail -fb "${cbf_id}" "Found ${desc} file{} in conf-dir '${conf_dir}' where it doesn't belong."
+				census_fatal "${cbf_id}" "${cd_file}"
+			done
+			IFS="${DEFAULT_IFS}"
+		done
+	done
+	[ -n "${cd_fail_ids}" ] && reg_fail -fb "${cd_fail_ids}" "Found multiple blockset files{}."
+	[ -z "${cd_fatal}" ]
+}
+
+# Blockset run states:
+# 0 - running
+# 1 - error
+# 2 - transitional
+# 3 - paused
+# 4 - stopped
+set_blocksets_env()
+{
+	local \
 		me=set_blocksets_env \
 		IFS="${DEFAULT_IFS}" \
 		sbe_ok sbe_should_stop \
 		valid_ids active_ids \
-		sbe_type sbe_id base_fname desc \
+		sbe_id \
 		r_parse_attempts=1 \
 		compr_util_path compr_ext compr_cmd_to_file compr_cmd_stdout extr_cmd_stdout \
 		rm_extra \
 		cs_res \
-		rd_file rd_files \
-		conf_dir conf_dirs all_conf_dirs cd_file \
-		cd_files cd_index cd_fatal cd_fail_ids \
+		conf_dir conf_dirs all_conf_dirs census_locals \
+		cd_index \
 		sbe_ids_out_var="${1}" sbe_ids="${2:-"${SET_IDS}"}"
 
 	debug_msg "" "${me} start, sbe_ids '${sbe_ids}'"
@@ -1539,93 +1652,14 @@ set_blocksets_env()
 
 	[ "${CUR_ACT}" != status ] && rm_extra=1
 
-	for sbe_id in ${SET_IDS}
-	do
-		local \
-			"bl_found_cnt__${sbe_id}=0" \
-			"sbe_state__${sbe_id}" \
-			"rd_found__${sbe_id}"
-	done
+	# The derivation below re-walks all_conf_dirs, so the census must index the same list
+	get_census_locals census_locals "${all_conf_dirs}"
+	[ -n "${census_locals}" ] && local ${census_locals}
 
-	# Register conf-scripts and blockset files in run-dir and all conf-dirs and check for stray ones
-
-	find_files rd_files "${ABL_RUN_DIR:?}" "${BLOCKSET_BASE_FNAME:?}" "*"
-	IFS="${_NL_}"
-	for rd_file in ${rd_files}
-	do
-		IFS="${DEFAULT_IFS}"
-		get_id_from_file sbe_id "${rd_file}" bl ||
-		{
-			log_msg "Removing the file '${rd_file}'."
-			rm -f "${rd_file}"
-			continue
-		}
-
-		debug_msg "Found ${rd_file}"
-		[ -n "${sbe_id}" ] &&
-		is_included "${sbe_id}" "${SET_IDS}" ||
-		{
-			reg_fail "Found unexpected blockset file '${rd_file}'."
-			sbe_fatal "" "${rd_file}"
-			continue
-		}
-		export -n "rd_found__${sbe_id}=${rd_file}"
-		incr_bl_found "${sbe_id}"
-	done
-	IFS="${DEFAULT_IFS}"
-
-	cd_index=0
-	for conf_dir in ${all_conf_dirs}
-	do
-		incr cd_index
-		for sbe_id in ${SET_IDS}
-		do
-			local \
-				"cs_found__${sbe_id}__${cd_index}=" \
-				"bl_found__${sbe_id}__${cd_index}="
-		done
-
-		for sbe_type in cs bl
-		do
-			case "${sbe_type}" in
-				cs) base_fname="${CS_BASE_FNAME:?}" desc=conf-script ;;
-				bl) base_fname="${BLOCKSET_BASE_FNAME:?}" desc=blockset
-			esac
-			find_files cd_files "${conf_dir}" "${base_fname}" "*" || continue
-
-			IFS="${_NL_}"
-			for cd_file in ${cd_files}
-			do
-				IFS="${DEFAULT_IFS}"
-				get_id_from_file sbe_id "${cd_file}" "${sbe_type}" &&
-				[ -n "${sbe_id}" ] &&
-				is_included "${sbe_id}" "${SET_IDS}" ||
-				{
-					reg_fail "Found unexpected ${desc} file '${cd_file}'."
-					sbe_fatal "" "${cd_file}"
-					continue
-				}
-
-				export -n "${sbe_type}_found__${sbe_id}__${cd_index}=${cd_file}"
-
-				[ "${sbe_type}" = bl ] &&
-				{
-					debug_msg "Found ${cd_file}"
-					incr_bl_found "${sbe_id}"
-				}
-
-				get_params "${sbe_id}" conf_dirs
-				is_included "${conf_dir}" "${conf_dirs}" &&
-					continue
-
-				reg_fail -fb "${sbe_id}" "Found ${desc} file{} in conf-dir '${conf_dir}' where it doesn't belong."
-				sbe_fatal "${sbe_id}" "${cd_file}"
-			done
-			IFS="${DEFAULT_IFS}"
-		done
-	done
-	[ -n "${cd_fail_ids}" ] && reg_fail -fb "${cd_fail_ids}" "Found multiple blockset files{}."
-	[ -n "${cd_fatal}" ] && { export -n FAIL_STOP_REQ=1; exit 1; }
+	# A census fault means dnsmasq may be serving a file adblock-lean does not account for. Removing the file
+	# does not unload it, and a targeted stop can not restart an instance no blockset names, so the emergency stop
+	# handles it. Not a local: some callers of this function arm nothing of their own
+	census_blockset_files "${all_conf_dirs}" || { export -n FAIL_STOP_REQ=1; exit 1; }
 
 	for sbe_id in ${SET_IDS}
 	do
@@ -3063,7 +3097,7 @@ try_read_blockset_metadata()
 			req_ids="${meta_ids}"
 			rbm_prefix=PERSIST_ ;;
 		RAM)
-			METADATA_BAD=
+			# METADATA_BAD is not cleared here: a stop owed by an earlier read must survive this process's later reads
 			METADATA_READ=
 			req_ids="${SET_IDS}"
 	esac

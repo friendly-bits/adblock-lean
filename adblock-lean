@@ -2393,7 +2393,8 @@ do_rm_blockset_config()
 
 	reg_action -purple -bf "${set_id}" "" "Removing{}."
 
-	KEEP_MNGD_PERSIST=0 do_stop "${set_id}" || { FAIL_STOP_REQ=1; exit 1; }
+	do_stop "${set_id}" || { FAIL_STOP_REQ=1; exit 1; }
+	KEEP_MNGD_PERSIST=0 rm_blocksets "${set_id}"
 	unset_param_vars "${set_id}"
 	rm -f "${cfg_path}" ||
 		{ reg_fail "Failed to remove blockset config '${set_id}'."; return 1; }
@@ -2737,7 +2738,7 @@ gen_persist_blockset()
 
 	get_valid_set_ids set_ids "${set_ids_arg}" "${me}" || return 1
 
-	# check_persist_dir() needs the dnsmasq parse. Intentionally not set_global_env() to avoid clearing METADATA_BAD
+	# check_persist_dir() needs the dnsmasq parse
 	# Bad persist dir must be rejected here: inside do_start it stops the blockset(s)
 	check_dmsq_instances || return 1
 
@@ -2795,7 +2796,8 @@ do_stop()
 		IN_STOP=1 \
 		force_stop_all="${FORCE_STOP_ALL:-}" \
 		set_id \
-		set_ids
+		set_ids \
+		census_dirs census_locals
 
 	debug_msg "STOP '${*:-"${SET_IDS}"}', force all: '${force_stop_all}'" ""
 
@@ -2814,6 +2816,12 @@ do_stop()
 		[ -n "${C_PROCESSED}" ] &&
 		{
 			parse_dmsq_runtime 3
+
+			# Census results are unused here but must not land in globals, hence the locals
+			add2list census_dirs "${R_CONF_DIRS} ${C_CONF_DIRS}"
+			get_census_locals census_locals "${census_dirs}"
+			[ -n "${census_locals}" ] && local ${census_locals}
+			census_blockset_files "${census_dirs}" &&
 			stop_blocksets "${set_ids}" &&
 				return 0
 		}

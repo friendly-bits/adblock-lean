@@ -922,7 +922,7 @@ gen_blocksets()
 	done
 
 	KEEP_BK=1 KEEP_MNGD_PERSIST=0 rm_blocksets "${PROC_SET_IDS}"
-	[ -z "${blocksets_to_stop}" ] || KEEP_BK=1 KEEP_MNGD_PERSIST=0 do_stop "${blocksets_to_stop}" || exit 1
+	[ -z "${blocksets_to_stop}" ] || KEEP_BK=1 do_stop "${blocksets_to_stop}" || exit 1
 
 	gen_set_parts "${set_ids}" ||
 	{
