@@ -324,6 +324,8 @@ check_dmsq_instances()
 	parse_dmsq_runtime "${r_parse_attempts:-1}"
 	[ ${?} = 1 ] && return 1
 
+	[ "${CUR_ACT}" = select_dnsmasq_instances ] && return 0
+
 	what_failed failed_instances failed_set_ids || return 1
 	[ -n "${failed_instances}" ] &&
 	{
@@ -1387,7 +1389,6 @@ set_all_env()
 }
 
 # Populates global vars required for processing, status and cleanup
-# 1 (optional): blockset IDs (defaults to all)
 set_global_env()
 {
 	local \
