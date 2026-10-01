@@ -1603,7 +1603,6 @@ set_blocksets_env()
 		sbe_ok sbe_should_stop \
 		valid_ids active_ids \
 		sbe_id \
-		r_parse_attempts=1 \
 		compr_util_path compr_ext compr_cmd_to_file compr_cmd_stdout extr_cmd_stdout \
 		rm_extra \
 		cs_res \
@@ -1634,17 +1633,8 @@ set_blocksets_env()
 		PART_EXTR_OR_CAT_STDOUT="try_extract -stdout"
 	}
 
-	[ -n "${METADATA_BAD}" ] && [ "${CUR_ACT}" != status ] &&
-	{
-		COMMIT_META_LOCATIONS=RAM FORCE_STOP_ALL=1 do_stop
-		[ -n "${SET_IDS}" ] && set_params "${SET_IDS}" "run_state="
-		METADATA_BAD=
-		r_parse_attempts=5
-		sleep 1
-	}
-
 	# Test adblocking: whether abl_test_domain is resolved, for all blocksets at once
-	CA_NOERR=1 check_active_blocksets active_ids "${SET_IDS}" 0 "${r_parse_attempts}"
+	CA_NOERR=1 check_active_blocksets active_ids "${SET_IDS}" 0
 
 	[ "${CUR_ACT}" = status ] || [ -n "${R_PROCESSED}" ] || return 1
 
@@ -2991,6 +2981,16 @@ read_blockset_metadata()
 	try_read_blockset_metadata "${meta_file}" "${rbm_ids}" "${meta_type}" "${known_path}"
 	rbm_rv=${?}
 	debug_msg "${me} end (${meta_type}): ${rbm_ids}"
+
+	[ "${meta_type}" = RAM ] && [ -n "${METADATA_BAD}" ] && [ -z "${IN_STOP}" ] && [ "${CUR_ACT}" != status ] &&
+	{
+		COMMIT_META_LOCATIONS=RAM ACCEPT_UNKNOWN_SET_IDS='' FORCE_STOP_ALL=1 do_stop
+		[ -n "${SET_IDS}" ] && set_params "${SET_IDS}" "run_state="
+		sleep 1
+		parse_dmsq_runtime 5
+		rbm_rv=2
+	}
+
 	[ "${meta_type}" != PERSIST ] &&
 	{
 		case "${rbm_rv}" in 0|2) ;; *) set_params "${rbm_ids}" run_state=1; esac
@@ -3097,7 +3097,6 @@ try_read_blockset_metadata()
 			req_ids="${meta_ids}"
 			rbm_prefix=PERSIST_ ;;
 		RAM)
-			# METADATA_BAD is not cleared here: a stop owed by an earlier read must survive this process's later reads
 			METADATA_READ=
 			req_ids="${SET_IDS}"
 	esac

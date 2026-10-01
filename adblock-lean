@@ -2810,6 +2810,8 @@ do_stop()
 
 	[ -n "${SET_IDS}" ] && [ -z "${METADATA_READ}" ] && read_blockset_metadata "${META_FILE:?}" "${SET_IDS}"
 
+	[ -n "${METADATA_BAD}" ] && force_stop_all=1
+
 	[ -z "${force_stop_all}" ] &&
 		{ get_valid_set_ids set_ids "${set_ids}" "do_stop" || return 1; } &&
 		[ -n "${CONFIG_LOADED}" ] &&
@@ -2841,6 +2843,7 @@ do_stop()
 	rm_conf_scripts -all
 
 	rm -f "${META_FILE}"
+	METADATA_BAD=
 
 	[ -n "${SET_IDS}" ] && [ -n "${CONFIG_LOADED}" ] &&
 	{
@@ -3483,7 +3486,8 @@ unset \
 	FAIL_STOP_REQ \
 	ABL_FAIL_MSG \
 	CVN_CLEAR \
-	LOCK_PID
+	LOCK_PID \
+	IN_STOP
 
 set -f
 set -o pipefail
